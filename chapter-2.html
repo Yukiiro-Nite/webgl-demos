@@ -1,0 +1,206 @@
+<html>
+  <head>
+    <title>WebGl demos - Chapter 2</title>
+    <!-- <link href="prism.css" rel="stylesheet" /> -->
+    <style>
+      body {
+        background: #16161d;
+        color: #afafb9;
+        font-size: 1em;
+        padding: 1em;
+      }
+      canvas {
+        display: block;
+        margin-bottom: 1em;
+      }
+
+      code {
+        display: block;
+        background-color: black;
+        padding: 1em;
+      }
+
+      hr {
+        border-color: #afafb9;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Chapter 2</h1>
+    <h2>First steps with WebGl</h2>
+    <div id="examples"></div>
+  </body>
+  <script>
+    const programs = {
+      clearCanvas1: {
+        summary: `First we start by clearing the canvas`,
+        fn: (canvas, gl) => {
+          gl.clearColor(0, 0, 0, 1)
+          gl.clear(gl.COLOR_BUFFER_BIT)
+        }
+      },
+      clearCanvas2: {
+        summary: `We can also clear the canvas to colors other than black. In WebGL and OpenGL, colors are defined with rgba values from 0 to 1.`,
+        fn: (canvas, gl) => {
+          gl.clearColor(0.2, 0, 0.2, 1)
+          gl.clear(gl.COLOR_BUFFER_BIT)
+        }
+      },
+      clearCanvas3: {
+        summary: `The alpha value doesn't work exactly how I'd expect it to work...`,
+        fn: (canvas, gl) => {
+          gl.clearColor(0.2, 0, 0.2, 0)
+          gl.clear(gl.COLOR_BUFFER_BIT)
+        }
+      },
+      drawPoint1: {
+        summary: `In order to draw a point, we have to define a vertex shader and a fragment shader.`,
+        fn: (canvas, gl) => {
+          // This is the vertex shader
+          const VSHADER_SOURCE =
+          `
+            void main() {
+              gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+              gl_PointSize = 10.0;
+            }
+          `
+          // This is the fragment shader
+          const FSHADER_SOURCE =
+          `
+            void main() {
+              gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+            }
+          `
+
+          initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+
+          gl.clearColor(0, 0, 0, 1)
+          gl.clear(gl.COLOR_BUFFER_BIT)
+          gl.drawArrays(gl.POINTS, 0, 1)
+        }
+      },
+      drawPoint2: {
+        summary: `Color and position can be changed by changing the vertex and fragment shaders.`,
+        fn: (canvas, gl) => {
+          const VSHADER_SOURCE =
+          `
+            void main() {
+              gl_Position = vec4(-0.8, 0.8, 0.0, 1.0);
+              gl_PointSize = 10.0;
+            }
+          `
+          const FSHADER_SOURCE =
+          `
+            void main() {
+              gl_FragColor = vec4(0.5, 0.0, 0.5, 1.0);
+            }
+          `
+
+          initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+
+          gl.clearColor(0, 0, 0, 1)
+          gl.clear(gl.COLOR_BUFFER_BIT)
+          gl.drawArrays(gl.POINTS, 0, 1)
+        }
+      },
+      attributeVariable1: {
+        summary: `One can pass variables into a shader from javascript land using an attribute variable.`,
+        fn: (canvas, gl) => {
+          const VSHADER_SOURCE =
+          `attribute vec4 a_Position;
+            void main() {
+              gl_Position = a_Position;
+              gl_PointSize = 10.0;
+            }
+          `
+          const FSHADER_SOURCE =
+          `
+            void main() {
+              gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+            }
+          `
+
+          initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)
+
+          const a_Position = gl.getAttribLocation(gl.program, 'a_Position')
+
+          if (a_Position < 0) {
+            console.log('Failed to get the location of a_Position')
+            return
+          }
+
+          gl.vertexAttrib3f(a_Position, 0, 0, 0)
+
+          gl.clearColor(0, 0, 0, 1)
+          gl.clear(gl.COLOR_BUFFER_BIT)
+          gl.drawArrays(gl.POINTS, 0, 1)
+        }
+      }
+    }
+
+    const examples = document.querySelector('#examples')
+
+    Object.entries(programs).map(([canvasId, {summary, fn}]) => {
+      const container = document.createElement('div')
+      container.class="example-container"
+      container.innerHTML = `
+        <hr/>
+        <p class="example-summary">${summary}</p>
+        <canvas width="256" height="256" id="${canvasId}"></canvas>
+        <code class="language-js">${fn.toString()}</code>
+      `
+      examples.appendChild(container)
+
+      const canvas = document.querySelector(`#${canvasId}`)
+      const gl = canvas.getContext('webgl')
+      fn(canvas, gl)
+    })
+
+    function initShaders(gl, vertSource, fragSource) {
+      const vertShader = gl.createShader(gl.VERTEX_SHADER)
+        const fragShader = gl.createShader(gl.FRAGMENT_SHADER)
+
+        gl.shaderSource(vertShader, vertSource)
+        gl.shaderSource(fragShader, fragSource)
+
+        gl.compileShader(vertShader)
+        gl.compileShader(fragShader)
+
+        const errors = [vertShader, fragShader].map(shader => ({
+          shader,
+          type: gl.getShaderParameter(shader, gl.SHADER_TYPE),
+          compileStatus: gl.getShaderParameter(shader, gl.COMPILE_STATUS)
+        }))
+        .filter(({compileStatus}) => !compileStatus)
+        .map(({shader, type}) => {
+          const log = gl.getShaderInfoLog(shader)
+          console.log(`Problem compiling shader type: ${type}\n${log}`)
+          return true
+        })
+
+        if(errors.length > 0) {
+          console.log('Shaders have errors, halting...')
+          return
+        }
+
+        const program = gl.createProgram()
+
+        gl.attachShader(program, vertShader)
+        gl.attachShader(program, fragShader)
+
+        gl.linkProgram(program)
+
+        const linkStatus = gl.getProgramParameter(program, gl.LINK_STATUS)
+
+        if(!linkStatus) {
+          console.log('Problem Linking shaders')
+          console.log(gl.getProgramInfoLog(program))
+          return
+        }
+
+        gl.useProgram(program)
+        gl.program = program
+    }
+  </script>
+  <!-- <script src="prism.js"></script> -->
+</html>
